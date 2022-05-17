@@ -5,6 +5,8 @@ const jwt = require('jsonwebtoken');
 const { MongoClient, ServerApiVersion } = require('mongodb');
 const app = express();
 const port = process.env.PORT || 5000;
+var nodemailer = require('nodemailer');
+var sgTransport = require('nodemailer-sendgrid-transport');
 
 app.use(cors());
 app.use(express.json());
@@ -24,6 +26,43 @@ function verifyJWT(req, res, next) {
         }
         req.decoded = decoded;
         next();
+    });
+}
+
+const emailSenderOptions = {
+    auth: {
+        api_key: process.env.EMAIL_SENDER_KEY
+    }
+}
+var emailClient = nodemailer.createTransport(sgTransport(emailSenderOptions));
+
+
+function sendAppointmentEmail(booking) {
+    const { patient, patientName, treatment, date, slot } = booking;
+
+    var email = {
+        from: process.env.EMAIL_SENDER,
+        to: patient,
+        subject: `Your appointment for ${treatment} is on ${date} at ${slot} is confirmed`,
+        text: `Your appointment for ${treatment} is on ${date} at ${slot} is confirmed`,
+        html: `
+            <div>
+                <P>Hello ${patient},</P>
+                <h4>Your appointment for ${treatment} is confirmed.</h4>
+                <P>Looking forward to see you on ${date} at ${slot}</P>
+                <P>Our address</P>
+                <P>Oslo, Norway</P>
+            </div>
+        `
+    };
+
+    emailClient.sendMail(email, function (err, info) {
+        if (err) {
+            console.log(err);
+        }
+        else {
+            console.log('Message sent: ', info);
+        }
     });
 }
 
@@ -130,6 +169,7 @@ async function run() {
                 return res.send({ success: false, booking: exists });
             }
             const result = await bookingCollection.insertOne(booking);
+            sendAppointmentEmail(booking);
             return res.send({ success: true, result });
         });
 
